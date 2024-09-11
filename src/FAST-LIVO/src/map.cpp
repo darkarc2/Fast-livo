@@ -208,7 +208,7 @@ namespace lidar_selection
         close_kfs.pop_front();
         return close_kfs.front().first;
     }
-
+    //从所有关键帧中，拿到离pos最远的关键帧
     FramePtr Map::getFurthestKeyframe(const Vector3d &pos) const
     {
         FramePtr furthest_kf;
@@ -225,6 +225,7 @@ namespace lidar_selection
         return furthest_kf;
     }
 
+    // 通过关键帧id拿到关键帧
     bool Map::getKeyframeById(const int id, FramePtr &frame) const
     {
         bool found = false;
@@ -238,13 +239,15 @@ namespace lidar_selection
         return found;
     }
 
+
+    //变化关键帧位姿，好像没用到这个函数
     void Map::transform(const Matrix3d &R, const Vector3d &t, const double &s)
     {
-        for (auto it = keyframes_.begin(), ite = keyframes_.end(); it != ite; ++it)
+        for (auto it = keyframes_.begin(), ite = keyframes_.end(); it != ite; ++it)//对于每个关键帧
         {
             Vector3d pos = s * R * (*it)->pos() + t;
             Matrix3d rot = R * (*it)->T_f_w_.rotation_matrix().inverse();
-            (*it)->T_f_w_ = SE3(rot, pos).inverse();
+            (*it)->T_f_w_ = SE3(rot, pos).inverse();//把关键帧位置转换到新的坐标系下
             for (auto ftr = (*it)->fts_.begin(); ftr != (*it)->fts_.end(); ++ftr)
             {
                 if ((*ftr)->point == nullptr)
@@ -257,7 +260,7 @@ namespace lidar_selection
         }
     }
 
-    void Map::emptyTrash()
+    void Map::emptyTrash()//真正的删除垃圾桶
     {
         std::for_each(trash_points_.begin(), trash_points_.end(), [&](PointPtr &pt)
                       {
@@ -278,64 +281,66 @@ namespace lidar_selection
         reset();
     }
 
-    void MapPointCandidates::newCandidatePoint(PointPtr point, double depth_sigma2)
-    {
-        // point->type_ = Point::TYPE_CANDIDATE;
-        boost::unique_lock<boost::mutex> lock(mut_);
-        candidates_.push_back(PointCandidate(point, point->obs_.front()));
-    }
+    // // 增加候选点，没有用到这个函数
+    // void MapPointCandidates::newCandidatePoint(PointPtr point, double depth_sigma2)
+    // {
+    //     // point->type_ = Point::TYPE_CANDIDATE;
+    //     boost::unique_lock<boost::mutex> lock(mut_);
+    //     candidates_.push_back(PointCandidate(point, point->obs_.front()));
+    // }
+    // // 增加候选点，没有用到这个函数
+    // void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
+    // {
+    //     boost::unique_lock<boost::mutex> lock(mut_);
+    //     PointCandidateList::iterator it = candidates_.begin();
+    //     while (it != candidates_.end())
+    //     {
+    //         if (it->first->obs_.front()->frame == frame.get())
+    //         {
+    //             // insert feature in the frame
+    //             // it->first->type_ = Point::TYPE_UNKNOWN;
+    //             it->first->n_failed_reproj_ = 0;
+    //             it->second->frame->addFeature(it->second);
+    //             it = candidates_.erase(it);
+    //             // std::cout<<"There is somrthing strange!!!"<<std::endl;
+    //         }
+    //         else
+    //             ++it;
+    //     }
+    // }
+    // //删除候选点，没有用到这个函数
+    // bool MapPointCandidates::deleteCandidatePoint(PointPtr point)
+    // {
+    //     boost::unique_lock<boost::mutex> lock(mut_);
+    //     for (auto it = candidates_.begin(), ite = candidates_.end(); it != ite; ++it)
+    //     {
+    //         if (it->first == point)
+    //         {
+    //             deleteCandidate(*it);
+    //             candidates_.erase(it);
+    //             return true;
+    //         }
+    //     }
+    //     return false;
+    // }
+    // //删除候选点，没有用到这个函数
+    // void MapPointCandidates::removeFrameCandidates(FramePtr frame)
+    // {
+    //     boost::unique_lock<boost::mutex> lock(mut_);
+    //     auto it = candidates_.begin();
+    //     while (it != candidates_.end())
+    //     {
+    //         if (it->second->frame == frame.get())
+    //         {
+    //             deleteCandidate(*it);
+    //             it = candidates_.erase(it);
+    //         }
+    //         else
+    //             ++it;
+    //     }
+    // }
 
-    void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
-    {
-        boost::unique_lock<boost::mutex> lock(mut_);
-        PointCandidateList::iterator it = candidates_.begin();
-        while (it != candidates_.end())
-        {
-            if (it->first->obs_.front()->frame == frame.get())
-            {
-                // insert feature in the frame
-                // it->first->type_ = Point::TYPE_UNKNOWN;
-                it->first->n_failed_reproj_ = 0;
-                it->second->frame->addFeature(it->second);
-                it = candidates_.erase(it);
-                // std::cout<<"There is somrthing strange!!!"<<std::endl;
-            }
-            else
-                ++it;
-        }
-    }
-
-    bool MapPointCandidates::deleteCandidatePoint(PointPtr point)
-    {
-        boost::unique_lock<boost::mutex> lock(mut_);
-        for (auto it = candidates_.begin(), ite = candidates_.end(); it != ite; ++it)
-        {
-            if (it->first == point)
-            {
-                deleteCandidate(*it);
-                candidates_.erase(it);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    void MapPointCandidates::removeFrameCandidates(FramePtr frame)
-    {
-        boost::unique_lock<boost::mutex> lock(mut_);
-        auto it = candidates_.begin();
-        while (it != candidates_.end())
-        {
-            if (it->second->frame == frame.get())
-            {
-                deleteCandidate(*it);
-                it = candidates_.erase(it);
-            }
-            else
-                ++it;
-        }
-    }
-
+    //候选点重置
     void MapPointCandidates::reset()
     {
         boost::unique_lock<boost::mutex> lock(mut_);
@@ -347,7 +352,7 @@ namespace lidar_selection
                       });
         candidates_.clear();
     }
-
+    //删除候选点，没有用到这个函数
     void MapPointCandidates::deleteCandidate(PointCandidate &c)
     {
         // camera-rig: another frame might still be pointing to the candidate point
@@ -358,6 +363,7 @@ namespace lidar_selection
         trash_points_.push_back(c.first);
     }
 
+    //真正的删除垃圾桶
     void MapPointCandidates::emptyTrash()
     {
         std::for_each(trash_points_.begin(), trash_points_.end(), [&](PointPtr &p)
@@ -368,79 +374,79 @@ namespace lidar_selection
         trash_points_.clear();
     }
 
-    namespace map_debug
-    {
+    // namespace map_debug
+    // {
 
-        void mapValidation(Map *map, int id)
-        {
-            for (auto it = map->keyframes_.begin(); it != map->keyframes_.end(); ++it)
-                frameValidation(it->get(), id);
-        }
+    //     void mapValidation(Map *map, int id)
+    //     {
+    //         for (auto it = map->keyframes_.begin(); it != map->keyframes_.end(); ++it)
+    //             frameValidation(it->get(), id);
+    //     }
 
-        void frameValidation(Frame *frame, int id)
-        {
-            for (auto it = frame->fts_.begin(); it != frame->fts_.end(); ++it)
-            {
-                if ((*it)->point == nullptr)
-                    continue;
+    //     void frameValidation(Frame *frame, int id)
+    //     {
+    //         for (auto it = frame->fts_.begin(); it != frame->fts_.end(); ++it)
+    //         {
+    //             if ((*it)->point == nullptr)
+    //                 continue;
 
-                // if((*it)->point->type_ == Point::TYPE_DELETED)
-                //   printf("ERROR DataValidation %i: Referenced point was deleted.\n", id);
+    //             // if((*it)->point->type_ == Point::TYPE_DELETED)
+    //             //   printf("ERROR DataValidation %i: Referenced point was deleted.\n", id);
 
-                if (!(*it)->point->findFrameRef(frame))
-                    printf("ERROR DataValidation %i: Frame has reference but point does not have a reference back.\n", id);
+    //             if (!(*it)->point->findFrameRef(frame))
+    //                 printf("ERROR DataValidation %i: Frame has reference but point does not have a reference back.\n", id);
 
-                pointValidation((*it)->point, id);
-            }
-            for (auto it = frame->key_pts_.begin(); it != frame->key_pts_.end(); ++it)
-                if (*it != nullptr)
-                    if ((*it)->point == nullptr)
-                        printf("ERROR DataValidation %i: KeyPoints not correct!\n", id);
-        }
+    //             pointValidation((*it)->point, id);
+    //         }
+    //         for (auto it = frame->key_pts_.begin(); it != frame->key_pts_.end(); ++it)
+    //             if (*it != nullptr)
+    //                 if ((*it)->point == nullptr)
+    //                     printf("ERROR DataValidation %i: KeyPoints not correct!\n", id);
+    //     }
 
-        void pointValidation(PointPtr point, int id)
-        {
-            for (auto it = point->obs_.begin(); it != point->obs_.end(); ++it)
-            {
-                bool found = false;
-                for (auto it_ftr = (*it)->frame->fts_.begin(); it_ftr != (*it)->frame->fts_.end(); ++it_ftr)
-                    if ((*it_ftr)->point == point)
-                    {
-                        found = true;
-                        break;
-                    }
-                // if(!found)
-                //   printf("ERROR DataValidation %i: Point %i has inconsistent reference in frame %i, is candidate = %i\n", id, point->id_, (*it)->frame->id_, (int) point->type_);
-            }
-        }
+    //     void pointValidation(PointPtr point, int id)
+    //     {
+    //         for (auto it = point->obs_.begin(); it != point->obs_.end(); ++it)
+    //         {
+    //             bool found = false;
+    //             for (auto it_ftr = (*it)->frame->fts_.begin(); it_ftr != (*it)->frame->fts_.end(); ++it_ftr)
+    //                 if ((*it_ftr)->point == point)
+    //                 {
+    //                     found = true;
+    //                     break;
+    //                 }
+    //             // if(!found)
+    //             //   printf("ERROR DataValidation %i: Point %i has inconsistent reference in frame %i, is candidate = %i\n", id, point->id_, (*it)->frame->id_, (int) point->type_);
+    //         }
+    //     }
 
-        void mapStatistics(Map *map)
-        {
-            // compute average number of features which each frame observes
-            size_t n_pt_obs(0);
-            for (auto it = map->keyframes_.begin(); it != map->keyframes_.end(); ++it)
-                n_pt_obs += (*it)->nObs();
-            printf("\n\nMap Statistics: Frame avg. point obs = %f\n", (float)n_pt_obs / map->size());
+    //     void mapStatistics(Map *map)
+    //     {
+    //         // compute average number of features which each frame observes
+    //         size_t n_pt_obs(0);
+    //         for (auto it = map->keyframes_.begin(); it != map->keyframes_.end(); ++it)
+    //             n_pt_obs += (*it)->nObs();
+    //         printf("\n\nMap Statistics: Frame avg. point obs = %f\n", (float)n_pt_obs / map->size());
 
-            // compute average number of observations that each point has
-            size_t n_frame_obs(0);
-            size_t n_pts(0);
-            std::set<PointPtr> points;
-            for (auto it = map->keyframes_.begin(); it != map->keyframes_.end(); ++it)
-            {
-                for (auto ftr = (*it)->fts_.begin(); ftr != (*it)->fts_.end(); ++ftr)
-                {
-                    if ((*ftr)->point == nullptr)
-                        continue;
-                    if (points.insert((*ftr)->point).second)
-                    {
-                        ++n_pts;
-                        n_frame_obs += (*ftr)->point->nRefs();
-                    }
-                }
-            }
-            printf("Map Statistics: Point avg. frame obs = %f\n\n", (float)n_frame_obs / n_pts);
-        }
+    //         // compute average number of observations that each point has
+    //         size_t n_frame_obs(0);
+    //         size_t n_pts(0);
+    //         std::set<PointPtr> points;
+    //         for (auto it = map->keyframes_.begin(); it != map->keyframes_.end(); ++it)
+    //         {
+    //             for (auto ftr = (*it)->fts_.begin(); ftr != (*it)->fts_.end(); ++ftr)
+    //             {
+    //                 if ((*ftr)->point == nullptr)
+    //                     continue;
+    //                 if (points.insert((*ftr)->point).second)
+    //                 {
+    //                     ++n_pts;
+    //                     n_frame_obs += (*ftr)->point->nRefs();
+    //                 }
+    //             }
+    //         }
+    //         printf("Map Statistics: Point avg. frame obs = %f\n\n", (float)n_frame_obs / n_pts);
+    //     }
 
-    } // namespace map_debug
+    // } // namespace map_debug
 } // namespace lidar_selection

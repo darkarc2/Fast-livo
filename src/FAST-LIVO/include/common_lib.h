@@ -63,7 +63,7 @@ typedef std::vector<float> FloatArray;
 #define MD(a, b) Matrix<double, (a), (b)>
 #define VD(a) Matrix<double, (a), 1>
 #define MF(a, b) Matrix<float, (a), (b)>
-#define VF(a) Matrix<float, (a), 1>
+#define VF(a) Matrix<float, (a), 1> //单列矩阵
 
 #define HASH_P 116101
 #define MAX_N 10000000000
@@ -430,7 +430,7 @@ struct StatesGroup
         this->vel_end = Zero3d;
     }
 
-    M3D rot_end;                              // the estimated attitude (rotation matrix) at the end lidar point
+    M3D rot_end;                              // the estimated attitude (rotation matrix) at the end lidar point 末激光雷达点的估计姿态旋转矩阵
     V3D pos_end;                              // the estimated position at the end lidar point (world frame)
     V3D vel_end;                              // the estimated velocity at the end lidar point (world frame)
     V3D bias_g;                               // gyroscope bias
@@ -508,11 +508,14 @@ bool esti_normvector(Matrix<T, 3, 1> &normvec, const PointVector &point, const T
 template <typename T>
 bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &threshold)
 {
+    // 定义矩阵 A 和向量 b，用于求解平面方程
+    //平面方程normvec*X+b=0,normvec法向量，X为点坐标，d为截距
     Matrix<T, NUM_MATCH_POINTS, 3> A;
     Matrix<T, NUM_MATCH_POINTS, 1> b;
-    b.setOnes();
-    b *= -1.0f;
+    b.setOnes(); // 将 b 初始化为全 1
+    b *= -1.0f; // 将 b 的每个元素乘以 -1
 
+    // 填充矩阵 A，每行对应一个点的坐标
     for (int j = 0; j < NUM_MATCH_POINTS; j++)
     {
         A(j, 0) = point[j].x;
@@ -520,35 +523,27 @@ bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &
         A(j, 2) = point[j].z;
     }
 
+    // 使用 QR 分解求解线性方程组 A * normvec = b，normvec法向量
     Matrix<T, 3, 1> normvec = A.colPivHouseholderQr().solve(b);
 
+    // 计算法向量的范数
     T n = normvec.norm();
+    // 归一化法向量并存储到 pca_result 中，因为之前相当于截距归一化到1了
     pca_result(0) = normvec(0) / n;
     pca_result(1) = normvec(1) / n;
     pca_result(2) = normvec(2) / n;
     pca_result(3) = 1.0 / n;
 
+    // 检查每个点到平面的距离是否小于阈值
     for (int j = 0; j < NUM_MATCH_POINTS; j++)
     {
         if (fabs(pca_result(0) * point[j].x + pca_result(1) * point[j].y + pca_result(2) * point[j].z + pca_result(3)) > threshold)
         {
-            return false;
+            return false; // 如果有任意一个点的距离大于阈值，则返回 false
         }
     }
 
-    // for (int j = 0; j < NUM_MATCH_POINTS; j++)
-    // {
-    //     if (fabs(normvec(0) * point[j].x + normvec(1) * point[j].y + normvec(2) * point[j].z + 1.0f) > threshold)
-    //     {
-    //         return false;
-    //     }
-    // }
-
-    // T n = normvec.norm();
-    // pca_result(0) = normvec(0) / n;
-    // pca_result(1) = normvec(1) / n;
-    // pca_result(2) = normvec(2) / n;
-    // pca_result(3) = 1.0 / n;
+    // 如果所有点都满足条件，则返回 true
     return true;
 }
 

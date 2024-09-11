@@ -131,7 +131,7 @@ namespace lidar_selection
         vector<PointPtr> voxel_points_;   //; 当前帧图像用到的子地图的3D点，是网格中深度最近的那个点，每次都会重新构造
         vector<V3D> add_voxel_points_;    //; 当前帧图像加入的新的地图点，是前帧图像新观测到的patch，每次都会重新构造
 
-        cv::Mat img_cp, img_rgb;
+        cv::Mat img_cp, img_rgb;//img current frame
         std::vector<FramePtr> overlap_kfs_;
         FramePtr new_frame_;
         FramePtr last_kf_;

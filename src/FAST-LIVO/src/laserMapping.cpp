@@ -82,14 +82,14 @@
 #define MAXN (360000)
 #define PUBFRAME_PERIOD (20)
 
-float DET_RANGE = 300.0f;
+float DET_RANGE = 300.0f;   // 激光雷达的最大检测范围
 #ifdef USE_ikdforest
-const int laserCloudWidth = 200;
+const int laserCloudWidth = 200;    //定义激光点云的宽度
 const int laserCloudHeight = 200;
 const int laserCloudDepth = 200;
 const int laserCloudNum = laserCloudWidth * laserCloudHeight * laserCloudDepth;
 #else
-const float MOV_THRESHOLD = 1.5f;
+const float MOV_THRESHOLD = 1.5f;   //局部地图移动阈值
 #endif
 
 mutex mtx_buffer;
@@ -105,75 +105,75 @@ M3F Eye3f(M3F::Identity());
 V3D Zero3d(0, 0, 0);
 V3F Zero3f(0, 0, 0);
 // Vector3d Lidar_offset_to_IMU(0.04165, 0.02326, -0.0284); // Avia
-Vector3d Lidar_offset_to_IMU;
+Vector3d Lidar_offset_to_IMU; // 激光雷达到imu的部署位置偏移
 int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0,
     effct_feat_num = 0, time_log_counter = 0, publish_count = 0;
 int MIN_IMG_COUNT = 0;
 
 double res_mean_last = 0.05;
-//double gyr_cov_scale, acc_cov_scale;
+//陀螺仪和加速度计的协方差
 double gyr_cov_scale = 0, acc_cov_scale = 0;
-//double last_timestamp_lidar, last_timestamp_imu = -1.0;
+//上次时间戳
 double last_timestamp_lidar = 0, last_timestamp_imu = -1.0, last_timestamp_img = -1.0;
-//double filter_size_corner_min, filter_size_surf_min, filter_size_map_min, fov_deg;
+//
 double filter_size_corner_min = 0, filter_size_surf_min = 0, filter_size_map_min = 0, fov_deg = 0;
-//double cube_len, HALF_FOV_COS, FOV_DEG, total_distance, lidar_end_time, first_lidar_time = 0.0;
+//double 局部地图大小、fov的一半的cos值、fov的角度、总距离、激光雷达结束时间、第一次激光雷达时间
 double cube_len = 0, HALF_FOV_COS = 0, FOV_DEG = 0, total_distance = 0, lidar_end_time = 0, first_lidar_time = 0.0;
 double first_img_time = -1.0;
-//double kdtree_incremental_time, kdtree_search_time;
+//double kdtrtee的增量时间、搜索时间、删除时间、搜索次数、开始kd树的大小、结束kd树的大小、添加点的大小、删除点的次数
 double kdtree_incremental_time = 0, kdtree_search_time = 0, kdtree_delete_time = 0.0;
 int kdtree_search_counter = 0, kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
 
-//double copy_time, readd_time, fov_check_time, readd_box_time, delete_box_time;
+//double 复制时间、读取时间、fov检查时间、读取box时间、删除box时间
 double copy_time = 0, readd_time = 0, fov_check_time = 0, readd_box_time = 0, delete_box_time = 0;
 double T1[MAXN], T2[MAXN], s_plot[MAXN], s_plot2[MAXN], s_plot3[MAXN], s_plot4[MAXN], s_plot5[MAXN], s_plot6[MAXN], s_plot7[MAXN];
-
+//double 匹配时间、解算时间、解算常数H时间
 double match_time = 0, solve_time = 0, solve_const_H_time = 0;
 
-bool lidar_pushed, flg_reset, flg_exit = false;
-bool ncc_en;
-int dense_map_en = 1;
-int img_en = 1;
-int lidar_en = 1;
-int debug = 0;
+bool lidar_pushed, flg_reset, flg_exit = false; //; 是否收到了lidar消息，是否需要重置，是否退出
+bool ncc_en;             // 是否使用ncc
+int dense_map_en = 1;   // 是否使用稠密地图
+int img_en = 1;        // 是否使用图像
+int lidar_en = 1;       // 是否使用激光雷达
+int debug = 0;          // 是否开启debug模式
 bool fast_lio_is_ready = false;
-int grid_size, patch_size;
-double outlier_threshold, ncc_thre;
+int grid_size, patch_size;  //; 网格大小，patch大小
+double outlier_threshold, ncc_thre; //; outlier异常值阈值，ncc阈值
 
-vector<BoxPointType> cub_needrm;
-vector<BoxPointType> cub_needad;
+vector<BoxPointType> cub_needrm;    //; 需要删除的立方体
+vector<BoxPointType> cub_needad;    //; 需要添加的立方体
 // deque<sensor_msgs::PointCloud2::ConstPtr> lidar_buffer;
 deque<PointCloudXYZI::Ptr> lidar_buffer;   // 收到的lidar点云
 deque<double> time_buffer;   // Lidar消息时间戳
 deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 deque<cv::Mat> img_buffer;   // 收到的图像信息
 deque<double> img_time_buffer;  // 图像时间戳
-vector<bool> point_selected_surf;
-vector<vector<int>> pointSearchInd_surf;
-vector<PointVector> Nearest_Points;
+vector<bool> point_selected_surf;   //; 选中的点云
+vector<vector<int>> pointSearchInd_surf;    //; 搜索到的点云
+vector<PointVector> Nearest_Points;   //; 最近的点云
 vector<double> res_last;
-vector<double> extrinT(3, 0.0);
-vector<double> extrinR(9, 0.0);
-vector<double> cameraextrinT(3, 0.0);
-vector<double> cameraextrinR(9, 0.0);
+vector<double> extrinT(3, 0.0); //; 外参
+vector<double> extrinR(9, 0.0);  //; 外参
+vector<double> cameraextrinT(3, 0.0);   //; 相机外参
+vector<double> cameraextrinR(9, 0.0);   //; 相机外参
 double total_residual;
-double LASER_POINT_COV, IMG_POINT_COV, cam_fx, cam_fy, cam_cx, cam_cy;
-bool flg_EKF_inited, flg_EKF_converged, EKF_stop_flg = 0;
+double LASER_POINT_COV, IMG_POINT_COV, cam_fx, cam_fy, cam_cx, cam_cy;  //; 激光点云的协方差，图像点云的协方差，相机内参
+bool flg_EKF_inited, flg_EKF_converged, EKF_stop_flg = 0;   //; 是否初始化了EKF，是否收敛了EKF，是否停止EKF
 //surf feature in map
-PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
-PointCloudXYZI::Ptr cube_points_add(new PointCloudXYZI());
-PointCloudXYZI::Ptr map_cur_frame_point(new PointCloudXYZI());
+PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI()); //; 地图中的特征点
+PointCloudXYZI::Ptr cube_points_add(new PointCloudXYZI());  //; 添加的立方体点云
+PointCloudXYZI::Ptr map_cur_frame_point(new PointCloudXYZI());  //; 当前帧用的地图点，很稀疏的点云
 PointCloudXYZI::Ptr sub_map_cur_frame_point(new PointCloudXYZI());  //; 当前图像用的视觉地图点，很稀疏的点云
 
-PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
-PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI());
-PointCloudXYZI::Ptr feats_down_world(new PointCloudXYZI());
-PointCloudXYZI::Ptr normvec(new PointCloudXYZI());
-PointCloudXYZI::Ptr laserCloudOri(new PointCloudXYZI());
-PointCloudXYZI::Ptr corr_normvect(new PointCloudXYZI());
+PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());  //; 未畸变的特征点
+PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI());  //; 下采样的特征点,到body坐标系
+PointCloudXYZI::Ptr feats_down_world(new PointCloudXYZI()); //; 下采样的特征点，到world坐标系
+PointCloudXYZI::Ptr normvec(new PointCloudXYZI());      //一种点云类型，可能存储了点云的法向量
+PointCloudXYZI::Ptr laserCloudOri(new PointCloudXYZI());    //; 原始的激光点云
+PointCloudXYZI::Ptr corr_normvect(new PointCloudXYZI());    //; 点云的法向量
 
-pcl::VoxelGrid<PointType> downSizeFilterSurf;
-pcl::VoxelGrid<PointType> downSizeFilterMap;
+pcl::VoxelGrid<PointType> downSizeFilterSurf;   //; 下采样滤波器surf表面
+pcl::VoxelGrid<PointType> downSizeFilterMap;        //; 下采样滤波器地图
 
 #ifdef USE_ikdtree
 #ifdef USE_ikdforest
@@ -185,12 +185,12 @@ KD_TREE ikdtree;
 pcl::KdTreeFLANN<PointType>::Ptr kdtreeSurfFromMap(new pcl::KdTreeFLANN<PointType>());
 #endif
 
-V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);
-V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
-V3D euler_cur;
-V3D position_last(Zero3d);
-Eigen::Matrix3d Rcl;
-Eigen::Vector3d Pcl;
+V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);//; 激光雷达坐标系下的X轴       雷达坐标系应该就是body坐标系
+V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);//; 世界坐标系下的X轴
+V3D euler_cur;//; 当前帧的欧拉角
+V3D position_last(Zero3d);//; 上一次的位置
+Eigen::Matrix3d Rcl;//; 
+Eigen::Vector3d Pcl;//; 
 
 //estimator inputs and output;
 LidarMeasureGroup LidarMeasures;   //; 同步之后的消息
@@ -211,14 +211,14 @@ geometry_msgs::PoseStamped msg_body_pose;
 //; 这个应该是lidar的前端特征点云的预处理类，主要是对lidar的点云进行稍微的处理（但是和提取平面特征又不完全一样）
 shared_ptr<Preprocess> p_pre(new Preprocess());
 
-void SigHandle(int sig)
+void SigHandle(int sig)//; 信号处理函数ROS下必须要用这个函数
 {
     flg_exit = true;
     ROS_WARN("catch sig %d", sig);
     sig_buffer.notify_all();
 }
 
-inline void dump_lio_state_to_log(FILE *fp)
+inline void dump_lio_state_to_log(FILE *fp)//; 将状态信息写入日志
 {
 #ifdef USE_IKFOM
     //state_ikfom write_state = kf.get_x();
@@ -251,7 +251,7 @@ inline void dump_lio_state_to_log(FILE *fp)
 }
 
 #ifdef USE_IKFOM
-//project the lidar scan to world frame
+// project the lidar scan to world frame//imu坐标系到激光坐标系，再到传入的s坐标系，s可能是世界到激光坐标系的变换
 void pointBodyToWorld_ikfom(PointType const *const pi, PointType *const po, state_ikfom &s)
 {
     V3D p_body(pi->x, pi->y, pi->z);
@@ -264,7 +264,7 @@ void pointBodyToWorld_ikfom(PointType const *const pi, PointType *const po, stat
 }
 #endif
 
-// 把局部坐标系下的点，通过全局维护的位姿变量投影到世界坐标系下
+// 把imu局部坐标系下的点，通过全局维护的位姿变量投影到世界坐标系下
 void pointBodyToWorld(PointType const *const pi, PointType *const po)
 {
     V3D p_body(pi->x, pi->y, pi->z);
@@ -272,7 +272,7 @@ void pointBodyToWorld(PointType const *const pi, PointType *const po)
     //state_ikfom transfer_state = kf.get_x();
     V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
 #else
-    V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);
+    V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);//把激光点转到imu坐标系，再转到世界坐标系
 #endif
 
     po->x = p_global(0);
@@ -289,14 +289,14 @@ void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
     //state_ikfom transfer_state = kf.get_x();
     V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
 #else
-    V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);
+    V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);//把激光点转到imu坐标系，再转到世界坐标系
 #endif
     po[0] = p_global(0);
     po[1] = p_global(1);
     po[2] = p_global(2);
 }
 
-void RGBpointBodyToWorld(PointType const *const pi, PointType *const po)
+void RGBpointBodyToWorld(PointType const *const pi, PointType *const po)//RGB点，从body坐标系到world坐标系
 {
     V3D p_body(pi->x, pi->y, pi->z);
 #ifdef USE_IKFOM
@@ -319,22 +319,22 @@ void RGBpointBodyToWorld(PointType const *const pi, PointType *const po)
 #ifndef USE_ikdforest
 int points_cache_size = 0;
 
-void points_cache_collect()
+void points_cache_collect() //; 收集删除的点云
 {
     PointVector points_history;
-    ikdtree.acquire_removed_points(points_history);
+    ikdtree.acquire_removed_points(points_history);//; 获取删除的点云
     points_cache_size = points_history.size();
 }
 
 #endif
 
-BoxPointType get_cube_point(float center_x, float center_y, float center_z)
+BoxPointType get_cube_point(float center_x, float center_y, float center_z)//; 获取立方体中心的的x、y、z边长坐标
 {
     BoxPointType cube_points;
     V3F center_p(center_x, center_y, center_z);
     // cout<<"center_p: "<<center_p.transpose()<<endl;
 
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < 3; i++)//获取cubex、y、z的最大最小值
     {
         cube_points.vertex_max[i] = center_p[i] + 0.5 * cube_len;
         cube_points.vertex_min[i] = center_p[i] - 0.5 * cube_len;
@@ -356,26 +356,27 @@ BoxPointType get_cube_point(float xmin, float ymin, float zmin, float xmax, floa
 }
 
 #ifndef USE_ikdforest
-BoxPointType LocalMap_Points;
-bool Localmap_Initialized = false;
+BoxPointType LocalMap_Points;   //; 本地地图的点云
+bool Localmap_Initialized = false;  //; 是否初始化了本地地图
 
-//; 过滤在当前LiDAR的FOV内的点云
+//; 过滤在当前LiDAR的FOV内的点云，也就是自动移动局部地图，保证激光雷达坐标始终在局部地图的中心附近
 void lasermap_fov_segment()
 {
-    cub_needrm.clear();
+    cub_needrm.clear();//; 删除需要删除的立方体
     kdtree_delete_counter = 0;
     kdtree_delete_time = 0.0;
     pointBodyToWorld(XAxisPoint_body, XAxisPoint_world);
 #ifdef USE_IKFOM
     //state_ikfom fov_state = kf.get_x();
     //V3D pos_LiD = fov_state.pos + fov_state.rot * fov_state.offset_T_L_I;
-    V3D pos_LiD = pos_lid;
+    V3D pos_LiD = pos_lid;//; 激光雷达的位置
 #else
     V3D pos_LiD = state.pos_end;
 #endif
     if (!Localmap_Initialized)
     {
         //if (cube_len <= 2.0 * MOV_THRESHOLD * DET_RANGE) throw std::invalid_argument("[Error]: Local Map Size is too small! Please change parameter \"cube_side_length\" to larger than %d in the launch file.\n");
+        //初始化局部地图
         for (int i = 0; i < 3; i++)
         {
             LocalMap_Points.vertex_min[i] = pos_LiD(i) - cube_len / 2.0;
@@ -385,30 +386,30 @@ void lasermap_fov_segment()
         return;
     }
     // printf("Local Map is (%0.2f,%0.2f) (%0.2f,%0.2f) (%0.2f,%0.2f)\n", LocalMap_Points.vertex_min[0],LocalMap_Points.vertex_max[0],LocalMap_Points.vertex_min[1],LocalMap_Points.vertex_max[1],LocalMap_Points.vertex_min[2],LocalMap_Points.vertex_max[2]);
-    float dist_to_map_edge[3][2];
+    float dist_to_map_edge[3][2];//定义一个数组，存储激光雷达到地图边缘的距离
     bool need_move = false;
     for (int i = 0; i < 3; i++)
     {
         dist_to_map_edge[i][0] = fabs(pos_LiD(i) - LocalMap_Points.vertex_min[i]);
         dist_to_map_edge[i][1] = fabs(pos_LiD(i) - LocalMap_Points.vertex_max[i]);
-        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE ||
+        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE ||  //; 如果激光雷达到地图边缘的距离小于(移动阈值*检测范围)(1.5*300)
             dist_to_map_edge[i][1] <= MOV_THRESHOLD * DET_RANGE)
-            need_move = true;
+            need_move = true;   //; 需要移动
     }
-    if (!need_move)
+    if (!need_move)//; 如果不需要移动，直接返回
         return;
-    BoxPointType New_LocalMap_Points, tmp_boxpoints;
+    BoxPointType New_LocalMap_Points, tmp_boxpoints;//; 新的局部地图点云
     New_LocalMap_Points = LocalMap_Points;
     float mov_dist = max((cube_len - 2.0 * MOV_THRESHOLD * DET_RANGE) * 0.5 * 0.9,
-                         double(DET_RANGE * (MOV_THRESHOLD - 1)));
+                         double(DET_RANGE * (MOV_THRESHOLD - 1)));  //; 移动的距离
     for (int i = 0; i < 3; i++)
     {
         tmp_boxpoints = LocalMap_Points;
-        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE)
+        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE)//x轴上超过之前的局部地图边界
         {
-            New_LocalMap_Points.vertex_max[i] -= mov_dist;
+            New_LocalMap_Points.vertex_max[i] -= mov_dist;//保持局部地图的大小不变，同时将整个局部地图向负方向平移，以确保激光雷达的位置始终在局部地图的中心附近。
             New_LocalMap_Points.vertex_min[i] -= mov_dist;
-            tmp_boxpoints.vertex_min[i] = LocalMap_Points.vertex_max[i] - mov_dist;
+            tmp_boxpoints.vertex_min[i] = LocalMap_Points.vertex_max[i] - mov_dist;//; 删除的立方体
             cub_needrm.push_back(tmp_boxpoints);
             // printf("Delete Box is (%0.2f,%0.2f) (%0.2f,%0.2f) (%0.2f,%0.2f)\n", tmp_boxpoints.vertex_min[0],tmp_boxpoints.vertex_max[0],tmp_boxpoints.vertex_min[1],tmp_boxpoints.vertex_max[1],tmp_boxpoints.vertex_min[2],tmp_boxpoints.vertex_max[2]);
         }
@@ -424,7 +425,7 @@ void lasermap_fov_segment()
     LocalMap_Points = New_LocalMap_Points;
 
     points_cache_collect();
-    double delete_begin = omp_get_wtime();
+    double delete_begin = omp_get_wtime();  //; 删除开始时间
     if (cub_needrm.size() > 0)
         kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
     kdtree_delete_time = omp_get_wtime() - delete_begin;
@@ -437,7 +438,7 @@ void lasermap_fov_segment()
 //; 通用LiDAR类型的回调函数，比如机械式的LiDAR
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
 {
-    mtx_buffer.lock();
+    mtx_buffer.lock();  //; 加锁
     // cout<<"got feature"<<endl;
     if (msg->header.stamp.toSec() < last_timestamp_lidar)
     {
@@ -446,18 +447,18 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     }
 
     PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
-    p_pre->process(msg, ptr);
+    p_pre->process(msg, ptr);   //处理激光雷达信息，放到ptr中
     // ROS_INFO("get point cloud at time: %.6f and size: %d", msg->header.stamp.toSec() - 0.1, ptr->points.size());
     //    ROS_INFO("get point cloud at time: %.6f and size: %d", msg->header.stamp.toSec(), ptr->points.size());
     printf("[ INFO ]: get standard point cloud at time: %.6f and size: %d.\n", msg->header.stamp.toSec(),
            int(ptr->points.size()));
-    lidar_buffer.push_back(ptr);
+    lidar_buffer.push_back(ptr);//; 将激光雷达点放到lidar_buffer中
     // time_buffer.push_back(msg->header.stamp.toSec() - 0.1);
     // last_timestamp_lidar = msg->header.stamp.toSec() - 0.1;
     time_buffer.push_back(msg->header.stamp.toSec());
     last_timestamp_lidar = msg->header.stamp.toSec();
-    mtx_buffer.unlock();
-    sig_buffer.notify_all();
+    mtx_buffer.unlock();        //; 解锁
+    sig_buffer.notify_all();    //; 通知所有等待的线程
 }
 
 //; livox激光雷达的消息回调函数
@@ -565,13 +566,21 @@ void img_cbk(const sensor_msgs::ImageConstPtr &msg)
  *            第1、2、3帧图像，那么此时就要先同步这三帧图像。但是显然这种方法对图像的处理是有一些滞后的， 
  *            因为它要求必须有了一帧LiDAR才能对 比这帧LiDAR更老的图像进行处理。不过lidar是10hz，也不会
  *            滞后太多，因此问题也不大。
+ * 
+ * 同步数据包的流程思想是：首先检查激光雷达和图像缓冲区是否为空，然后根据激光雷达和图像的时间戳来决定如何处理数据，最后将处理后的数据添加到测量组中。具体步骤如下，初始化时每隔1ms跑一下，直到成功为止：
+    如果激光雷达缓冲区和图像缓冲区都为空，返回 false。
+    如果上次是激光雷达数据结束，清空测量组并重置标志。
+    如果激光雷达数据未推送，处理激光雷达数据并计算时间戳。
+    如果没有图像数据，根据 IMU 时间戳处理 IMU 数据并添加到测量组。
+    如果图像时间晚于激光雷达时间，只处理 IMU 数据并添加到测量组。
+    否则，处理 IMU 和图像数据并添加到测量组。
  * @param[in] meas 
  * @return true 
  * @return false 
  */
 bool sync_packages(LidarMeasureGroup &meas)
 {
-    if ((lidar_buffer.empty() && img_buffer.empty()))
+    if ((lidar_buffer.empty() && img_buffer.empty()))//; 如果激光雷达和图像都为空，直接返回
     { // has lidar topic or img topic?
         return false;
     }
@@ -581,7 +590,7 @@ bool sync_packages(LidarMeasureGroup &meas)
     //; 图像数据的时候就要先清空了，因为measures里面存储的是以上一帧LiDAR为结尾的多帧的图像数据和IMU数据
     if (meas.is_lidar_end) 
     {
-        meas.measures.clear();
+        meas.measures.clear(); 
         meas.is_lidar_end = false;
     }
 
@@ -627,7 +636,6 @@ bool sync_packages(LidarMeasureGroup &meas)
         //; 对lidar中的点云根据时间戳进行排序
         sort(meas.lidar->points.begin(), meas.lidar->points.end(), time_list); 
         // generate lidar_beg_time // 雷达开始时间
-        //! 疑问：这个地方感觉和前面 lidar_buffer.pop_front(); 不同步？但是正常来说前面的问题应该不会发生
         meas.lidar_beg_time = time_buffer.front();   
         //; 一帧lidar结束的绝对时间戳                          
         lidar_end_time =
@@ -745,7 +753,7 @@ bool sync_packages(LidarMeasureGroup &meas)
     return true;
 }
 
-void map_incremental()
+void map_incremental()//地图增量更新
 {
     for (int i = 0; i < feats_down_size; i++)
     {
@@ -764,12 +772,13 @@ void map_incremental()
 // PointCloudXYZRGB::Ptr pcl_wait_pub_RGB(new PointCloudXYZRGB(500000, 1));
 //; 在一次LIO优化后，当前LiDAR帧的点云转到世界坐标系下的点云
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI());
-
+//上传当前帧的点云到ROS发布，也是核心的点云上色部分
+//传入参数：pubLaserCloudFullRes：发布的ROS消息，lidar_selector：目前所看到的这一片点云
 void publish_frame_world_rgb(const ros::Publisher &pubLaserCloudFullRes, lidar_selection::LidarSelectorPtr lidar_selector)
 {
     uint size = pcl_wait_pub->points.size();
     PointCloudXYZRGB::Ptr laserCloudWorldRGB(new PointCloudXYZRGB(size, 1));
-    if (img_en)
+    if (img_en) //; 如果有图像信息
     {
         laserCloudWorldRGB->clear();
         for (int i = 0; i < size; i++)
@@ -778,10 +787,10 @@ void publish_frame_world_rgb(const ros::Publisher &pubLaserCloudFullRes, lidar_s
             pointRGB.x = pcl_wait_pub->points[i].x;
             pointRGB.y = pcl_wait_pub->points[i].y;
             pointRGB.z = pcl_wait_pub->points[i].z;
-            V3D p_w(pcl_wait_pub->points[i].x, pcl_wait_pub->points[i].y, pcl_wait_pub->points[i].z);
-            V2D pc(lidar_selector->new_frame_->w2c(p_w));
+            V3D p_w(pointRGB.x, pointRGB.y, pointRGB.z);
+            V2D pc(lidar_selector->new_frame_->w2c(p_w));//point in camera
             //; 把上一帧的LIDAR点云投影到当前帧的相机坐标系下，找对应的颜色给点云赋值
-            if (lidar_selector->new_frame_->cam_->isInFrame(pc.cast<int>(), 0))
+            if (lidar_selector->new_frame_->cam_->isInFrame(pc.cast<int>(), 0))//; 如果点在图像内
             {
                 // cv::Mat img_cur = lidar_selector->new_frame_->img();
                 cv::Mat img_rgb = lidar_selector->img_rgb;
@@ -799,7 +808,7 @@ void publish_frame_world_rgb(const ros::Publisher &pubLaserCloudFullRes, lidar_s
         if (img_en)
         {
             // cout << "RGB pointcloud size: " << laserCloudWorldRGB->size() << endl;
-            pcl::toROSMsg(*laserCloudWorldRGB, laserCloudmsg);
+            pcl::toROSMsg(*laserCloudWorldRGB, laserCloudmsg);  //转到ROS消息
         }
         else
         {
@@ -807,11 +816,12 @@ void publish_frame_world_rgb(const ros::Publisher &pubLaserCloudFullRes, lidar_s
         }
         laserCloudmsg.header.stamp = ros::Time::now(); //.fromSec(last_timestamp_lidar);
         laserCloudmsg.header.frame_id = "camera_init";
-        pubLaserCloudFullRes.publish(laserCloudmsg);
+        pubLaserCloudFullRes.publish(laserCloudmsg);//发布
         publish_count -= PUBFRAME_PERIOD; // publish_count以imu的发布为准 PUBFRAME_PERIOD：20
     }
 }
 
+//; 上传当前帧的点云到ROS发布，不带rgb颜色
 void publish_frame_world(const ros::Publisher &pubLaserCloudFullRes)
 {
     uint size = pcl_wait_pub->points.size();
@@ -828,6 +838,7 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFullRes)
     }
 }
 
+//没用到，发布视觉地图到ROS
 void publish_visual_world_map(const ros::Publisher &pubVisualCloud)
 {
     PointCloudXYZI::Ptr laserCloudFullRes(map_cur_frame_point);
@@ -846,7 +857,7 @@ void publish_visual_world_map(const ros::Publisher &pubVisualCloud)
         publish_count -= PUBFRAME_PERIOD;
     }
 }
-
+//发布视觉子地图到ROS
 void publish_visual_world_sub_map(const ros::Publisher &pubSubVisualCloud)
 {
     //; 当前帧图像用的很稀疏的视觉地图点云
@@ -866,7 +877,7 @@ void publish_visual_world_sub_map(const ros::Publisher &pubSubVisualCloud)
         publish_count -= PUBFRAME_PERIOD;
     }
 }
-
+// 发布有色彩效果的当前帧到ROS
 void publish_effect_world(const ros::Publisher &pubLaserCloudEffect)
 {
     PointCloudXYZI::Ptr laserCloudWorld(
@@ -882,7 +893,7 @@ void publish_effect_world(const ros::Publisher &pubLaserCloudEffect)
     laserCloudFullRes3.header.frame_id = "camera_init";
     pubLaserCloudEffect.publish(laserCloudFullRes3);
 }
-
+//发布地图到ROS
 void publish_map(const ros::Publisher &pubLaserCloudMap)
 {
     sensor_msgs::PointCloud2 laserCloudMap;
@@ -893,7 +904,7 @@ void publish_map(const ros::Publisher &pubLaserCloudMap)
 }
 
 template <typename T>
-void set_posestamp(T &out)
+void set_posestamp(T &out)   //模板类，设置pose
 {
     out.position.x = state.pos_end(0);
     out.position.y = state.pos_end(1);
@@ -903,7 +914,7 @@ void set_posestamp(T &out)
     out.orientation.z = geoQuat.z;
     out.orientation.w = geoQuat.w;
 }
-
+//发布里程计到ROS
 void publish_odometry(const ros::Publisher &pubOdomAftMapped)
 {
     odomAftMapped.header.frame_id = "camera_init";
@@ -912,7 +923,7 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped)
     set_posestamp(odomAftMapped.pose.pose);
     pubOdomAftMapped.publish(odomAftMapped);
 }
-
+//发布mavros坐标系到ROS
 void publish_mavros(const ros::Publisher &mavros_pose_publisher)
 {
     msg_body_pose.header.stamp = ros::Time::now();
@@ -920,7 +931,7 @@ void publish_mavros(const ros::Publisher &mavros_pose_publisher)
     set_posestamp(msg_body_pose.pose);
     mavros_pose_publisher.publish(msg_body_pose);
 }
-
+//发布路径到ROS
 void publish_path(const ros::Publisher pubPath)
 {
     set_posestamp(msg_body_pose.pose);
@@ -930,7 +941,7 @@ void publish_path(const ros::Publisher pubPath)
     pubPath.publish(path);
 }
 
-//; 从ROS参数服务器中读取参数
+//; 从ROS参数服务器中读取参数，动态调节参数rosrun rqt_reconfigure rqt_reconfigure
 void readParameters(ros::NodeHandle &nh)
 {
     nh.param<int>("dense_map_enable", dense_map_en, 1);
@@ -944,24 +955,24 @@ void readParameters(ros::NodeHandle &nh)
     nh.param<double>("cam_fy", cam_fy, 453.254913);
     nh.param<double>("cam_cx", cam_cx, 318.908851);
     nh.param<double>("cam_cy", cam_cy, 234.238189);
-    nh.param<double>("laser_point_cov", LASER_POINT_COV, 0.001);
+    nh.param<double>("laser_point_cov", LASER_POINT_COV, 0.001);// 激光点云的协方差
     nh.param<double>("img_point_cov", IMG_POINT_COV, 10);
     nh.param<string>("map_file_path", map_file_path, "");
-    nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
-    nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
-    nh.param<string>("camera/img_topic", img_topic, "/usb_cam/image_raw");
-    nh.param<double>("filter_size_corner", filter_size_corner_min, 0.5);
-    nh.param<double>("filter_size_surf", filter_size_surf_min, 0.5);
+    nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");// 激光雷达的topic
+    nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");// IMU的topic
+    nh.param<string>("camera/img_topic", img_topic, "/usb_cam/image_raw");// 相机的topic
+    nh.param<double>("filter_size_corner", filter_size_corner_min, 0.5);// 角点的滤波器大小
+    nh.param<double>("filter_size_surf", filter_size_surf_min, 0.5);// 面点的滤波器大小
     nh.param<double>("filter_size_map", filter_size_map_min, 0.5);
-    nh.param<double>("cube_side_length", cube_len, 200);
+    nh.param<double>("cube_side_length", cube_len, 200);// cube地图的边长
     nh.param<double>("mapping/fov_degree", fov_deg, 180); // FOV
-    nh.param<double>("mapping/gyr_cov_scale", gyr_cov_scale, 1.0);
-    nh.param<double>("mapping/acc_cov_scale", acc_cov_scale, 1.0);
-    nh.param<double>("preprocess/blind", p_pre->blind, 0.01);
-    nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
-    nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
-    nh.param<int>("point_filter_num", p_pre->point_filter_num, 2);
-    nh.param<bool>("feature_extract_enable", p_pre->feature_enabled, 0);
+    nh.param<double>("mapping/gyr_cov_scale", gyr_cov_scale, 1.0);// 陀螺仪的协方差
+    nh.param<double>("mapping/acc_cov_scale", acc_cov_scale, 1.0);// 加速度计的协方差
+    nh.param<double>("preprocess/blind", p_pre->blind, 0.01);// 激光雷达的盲区
+    nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);// 激光雷达的类型
+    nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);// 激光雷达的线数
+    nh.param<int>("point_filter_num", p_pre->point_filter_num, 2);// 点云滤波的数量
+    nh.param<bool>("feature_extract_enable", p_pre->feature_enabled, 0);// 特征提取的使能
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>()); // 雷达imu外参
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
     nh.param<vector<double>>("camera/Pcl", cameraextrinT, vector<double>()); // 相机雷达外参
@@ -977,12 +988,12 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "laserMapping");
     ros::NodeHandle nh;
     image_transport::ImageTransport it(nh); // ros 用于image订阅和发布
-    readParameters(nh);
+    readParameters(nh); //读取配置参数
     cout << "debug:" << debug << " MIN_IMG_COUNT: " << MIN_IMG_COUNT << endl;
     pcl_wait_pub->clear(); // TODO：等待发布的点云？ note：world frame
-    //; 订阅LiDAR、IMU、img消息
+    //=========================订阅LiDAR、IMU、img消息============
     ros::Subscriber sub_pcl = p_pre->lidar_type == AVIA ? 
-        nh.subscribe(lid_topic, 200000, livox_pcl_cbk) : nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
+        nh.subscribe(lid_topic, 200000, livox_pcl_cbk) : nh.subscribe(lid_topic, 200000, standard_pcl_cbk);//回调函数的队列长度为200000，代表最多缓存200000个消息
     ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
     ros::Subscriber sub_img = nh.subscribe(img_topic, 200000, img_cbk);
     image_transport::Publisher img_pub = it.advertise("/rgb_img", 1);
@@ -999,21 +1010,21 @@ int main(int argc, char **argv)
     path.header.frame_id = "camera_init";
 
     /*** variables definition ***/
-    VD(DIM_STATE) solution; // 18*1
-    MD(DIM_STATE, DIM_STATE) G, H_T_H, I_STATE; // 18*18
-    V3D rot_add, t_add;
-    StatesGroup state_propagat;
-    PointType pointOri, pointSel, coeff;
+    VD(DIM_STATE) solution; // 18*1 解向量
+    MD(DIM_STATE, DIM_STATE) G, H_T_H, I_STATE; // 18*18 矩阵
+    V3D rot_add, t_add; // 旋转增量和平移增量
+    StatesGroup state_propagat; // 状态传播
+    PointType pointOri, pointSel, coeff; // 点类型变量
 
-    int effect_feat_num = 0, frame_num = 0;
-    double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_solve = 0, aver_time_const_H_time = 0;
+    int effect_feat_num = 0, frame_num = 0; // 有效特征点数量和帧数
+    double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_solve = 0, aver_time_const_H_time = 0; // 时间相关变量
 
-    FOV_DEG = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0);
-    HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0); // TODO：没用到，传入fov_deg有什么用？
+    FOV_DEG = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0); // 视场角度
+    HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0); // 半视场角的余弦值 // TODO：没用到，传入fov_deg有什么用？
 
     // 降采样系数
-    downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min);
-    downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
+    downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min); // 设置表面降采样滤波器的叶子大小
+    downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min); // 设置地图降采样滤波器的叶子大小
 
     //; IMU处理的函数
     shared_ptr<ImuProcess> p_imu(new ImuProcess());
@@ -1023,9 +1034,9 @@ int main(int argc, char **argv)
     M3D extR;
     extT << VEC_FROM_ARRAY(extrinT);
     extR << MAT_FROM_ARRAY(extrinR);
-    Lidar_offset_to_IMU = extT;
+    Lidar_offset_to_IMU = extT;//; LiDAR雷达到IMU的外参
 
-    //! 重要：处理VIO部分的类
+    //! -------------------------------重要：处理VIO部分的类-------------------------------
     lidar_selection::LidarSelectorPtr lidar_selector(
         new lidar_selection::LidarSelector(grid_size, new SparseMap));
     //; 从命名空间中读取参数，生成一个虚拟的相机类
@@ -1084,14 +1095,14 @@ int main(int argc, char **argv)
     fout_dbg.open(DEBUG_FILE_DIR("dbg.txt"), ios::out);
 
     //------------------------------------------------------------------------------------------------------
-    signal(SIGINT, SigHandle);
-    ros::Rate rate(5000);
+    signal(SIGINT, SigHandle);  //; 注册信号处理函数
+    ros::Rate rate(5000);       //; 设置执行频率5000次/s
     bool status = ros::ok();
     while (status)
     {
         if (flg_exit)
             break;
-        ros::spinOnce();
+        ros::spinOnce();        //; 处理回调函数,会先处理回调函数，然后再执行后面的代码，依次执行回调函数，先跑第一个，下次运行到spinOnce，再跑第二个回调
         // Step 1: 同步LiDAR、IMU、Image信息，如果没有同步成功，则一直在这里等待
         if (!sync_packages(LidarMeasures))
         {
@@ -1110,7 +1121,7 @@ int main(int argc, char **argv)
             continue;
         }
 
-        // double t0,t1,t2,t3,t4,t5,match_start, match_time, solve_start, solve_time, svd_time;
+        // 初始化
         double t0, t1, t2, t3, t4, t5, match_start, solve_start, svd_time;
 
         match_time = kdtree_search_time = kdtree_search_counter = solve_time = solve_const_H_time = svd_time = 0;
@@ -1120,16 +1131,16 @@ int main(int argc, char **argv)
 
         // Step 2: 利用IMU数据对状态变量进行积分递推，同时得到去畸变之后的LIDAR点云
         //! 疑问：里面的代码太乱，没有看懂如果当前帧是图像，到底有没有对点云进行去畸变
-        //! 暂时解答：感觉应该是没有去畸变处理的，以为里面的操作如果是图像则点的时间都不满足要求，都不会去畸变
-        p_imu->Process2(LidarMeasures, state, feats_undistort);
+        //! 暂时解答：感觉应该是没有去畸变处理的，因为里面的操作如果是图像则点的时间都不满足要求，都不会去畸变
+        p_imu->Process2(LidarMeasures, state, feats_undistort); //; IMU处理，得到去畸变之后的LIDAR点云feats_undistort
         state_propagat = state;
 
-        if (lidar_selector->debug)
+        if (lidar_selector->debug)  //; 是否显示debug信息
         {
             LidarMeasures.debug_show();
         }
 
-        if (feats_undistort->empty() || (feats_undistort == nullptr))
+        if (feats_undistort->empty() || (feats_undistort == nullptr))//; 如果没有点云，直接跳过
         {
             cout << " No point!!!" << endl;
             if (!fast_lio_is_ready)
@@ -1147,7 +1158,7 @@ int main(int argc, char **argv)
         }
         fast_lio_is_ready = true;
         // <0.5 false; >=0.5 true
-        flg_EKF_inited = (LidarMeasures.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true; 
+        flg_EKF_inited = (LidarMeasures.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true; //0.5秒后判断成功初始化EKF
         
         // Step 3: 当前是图像帧，则进行视觉VIO处理
         if (!LidarMeasures.is_lidar_end)
@@ -1163,16 +1174,16 @@ int main(int argc, char **argv)
             //; 如果开启VIO模块，则才往下处理
             if (img_en)
             {
-                euler_cur = RotMtoEuler(state.rot_end);
+                euler_cur = RotMtoEuler(state.rot_end);//; 当前帧的欧拉角
                 fout_pre << setw(20) << LidarMeasures.last_update_time - first_lidar_time << " "
                          << euler_cur.transpose() * 57.3 << " " << state.pos_end.transpose() << " "
                          << state.vel_end.transpose() << " " << state.bias_g.transpose() << " "
                          << state.bias_a.transpose() << " " << state.gravity.transpose() << endl;
 
                 /* visual main */
-                //! 重要：视觉VIO的主函数！
-                //; 传入: 当前帧的图像 和 上一帧的LiDAR在世界坐标系下的点云
-                lidar_selector->detect(LidarMeasures.measures.back().img, pcl_wait_pub); 
+                //! 重要：视觉VIO的主函数！！！！！！！！！！！！！！！！！！！！！！，detect核心函数主要用它所占用的体素来选择当前帧的FoV内的子地图)
+                //; 传入: 当前帧的图像(measures中最新的图像) 和 上一帧的LiDAR在世界坐标系下的点云
+                lidar_selector->detect(LidarMeasures.measures.back().img, pcl_wait_pub);    
 
                 double time_end = omp_get_wtime();
                 std::cout << "-- vio time: " << (time_end - time_start) << std::endl;
@@ -1181,8 +1192,8 @@ int main(int argc, char **argv)
                 int size_sub = lidar_selector->sub_map_cur_frame_.size();
 
                 // map_cur_frame_point->clear();
+                //清除之前的sub_map_cur_frame_point，加入当前帧下的sub_map_cur_frame_点云,很稀疏，大概一个体素一个点
                 sub_map_cur_frame_point->clear();
-
                 for (int i = 0; i < size_sub; i++)
                 {
                     PointType temp_map;
@@ -1194,19 +1205,21 @@ int main(int argc, char **argv)
                 }
                 // cout<<"2222222222222";
                 // cout<<"new_frame_: "<<lidar_selector->new_frame_->id_<<endl;
-                cv::Mat img_rgb = lidar_selector->img_cp;
+                //------------------- 发布图像到ROS -------------------
+                cv::Mat img_rgb = lidar_selector->img_cp;//; 当前帧的图像
                 cv_bridge::CvImage out_msg;
                 out_msg.header.stamp = ros::Time::now();
                 // out_msg.header.frame_id = "camera_init";
                 out_msg.encoding = sensor_msgs::image_encodings::BGR8;
                 out_msg.image = img_rgb;
-                img_pub.publish(out_msg.toImageMsg());
+                img_pub.publish(out_msg.toImageMsg());  // 发布图像到ROS
 
                 // 发布带有rgb信息的点云信息
                 publish_frame_world_rgb(pubLaserCloudFullResRgb, lidar_selector); 
-                // 发布sub_map_cur_frame_point
+                // 发布sub_map_cur_frame_point，很稀疏，大概一个体素一个点
                 publish_visual_world_sub_map(pubSubVisualCloud);  
 
+                //从欧拉加输出四元数msg
                 geoQuat = tf::createQuaternionMsgFromRollPitchYaw(euler_cur(0), euler_cur(1), euler_cur(2));
                 publish_odometry(pubOdomAftMapped);
                 euler_cur = RotMtoEuler(state.rot_end);
@@ -1222,13 +1235,13 @@ int main(int argc, char **argv)
 
         // Step 4: 运行到这里，说明当前是LiDAR帧，则运行LIO
         /*** Segment the map in lidar FOV ***/
-        lasermap_fov_segment();
+        lasermap_fov_segment();//过滤在当前LiDAR的FOV内的点云，也就是自动移动局部地图，保证激光雷达坐标始终在局部地图的中心附近
 
-        /*** downsample the feature points in a scan ***/
+        /*** 下采样扫描到的点 ***/
         downSizeFilterSurf.setInputCloud(feats_undistort);
         downSizeFilterSurf.filter(*feats_down_body);
 
-        /*** initialize the map kdtree ***/
+        /*** 初始化 the map kdtree ***/
         if (ikdtree.Root_Node == nullptr)
         {
             if (feats_down_body->points.size() > 5)
@@ -1238,20 +1251,20 @@ int main(int argc, char **argv)
             }
             continue;
         }
-        int featsFromMapNum = ikdtree.size();
+        int featsFromMapNum = ikdtree.size();//地图中的点云数量
 
-        feats_down_size = feats_down_body->points.size();
+        feats_down_size = feats_down_body->points.size();//这次下采样的点云数量
         // cout << "[ LIO ]: Raw feature num: " << feats_undistort->points.size() << " downsamp num " << feats_down_size
         //      << " Map num: " << featsFromMapNum << "." << endl;
 
-        /*** ICP and iterated Kalman filter update ***/
+        /*** ICP and iterated Kalman filter update ICP匹配和增量迭代卡尔曼滤波更新 ***/
         normvec->resize(feats_down_size);
         feats_down_world->resize(feats_down_size);
         //vector<double> res_last(feats_down_size, 1000.0); // initial //
-        res_last.resize(feats_down_size, 1000.0);
+        res_last.resize(feats_down_size, 1000.0);//上一次的残差
 
         t1 = omp_get_wtime();
-        if (lidar_en)
+        if (lidar_en)//显示一些信息
         {
             euler_cur = RotMtoEuler(state.rot_end);
             fout_pre << setw(20) << LidarMeasures.last_update_time - first_lidar_time << " "
@@ -1260,7 +1273,7 @@ int main(int argc, char **argv)
                      << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() << " " << state.gravity.transpose() << endl;
         }
 
-        if (0)
+        if (0)//不执行跳过
         {
             PointVector().swap(ikdtree.PCL_Storage);
             ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);
@@ -1270,7 +1283,7 @@ int main(int argc, char **argv)
 
         point_selected_surf.resize(feats_down_size, true);
         pointSearchInd_surf.resize(feats_down_size);
-        Nearest_Points.resize(feats_down_size);
+        Nearest_Points.resize(feats_down_size);//最近点
         int rematch_num = 0;
         bool nearest_search_en = true; //
 
@@ -1282,18 +1295,18 @@ int main(int argc, char **argv)
         if (img_en)
         {
             omp_set_num_threads(MP_PROC_NUM); // 设置线程的默认周期数为MP_PROC_NUM 4
-#pragma omp parallel for // 并行计算
-            for (int i = 0; i < 1; i++)
-            {
-            }
+// #pragma omp parallel for // 并行计算，疑似写错了
+//             for (int i = 0; i < 1; i++)
+//             {
+//             }
         }
 
         if (lidar_en)
         {
-            for (iterCount = -1; iterCount < NUM_MAX_ITERATIONS && flg_EKF_inited; iterCount++)
+            for (iterCount = -1; iterCount < NUM_MAX_ITERATIONS && flg_EKF_inited; iterCount++)//迭代优化
             {
                 match_start = omp_get_wtime();
-                PointCloudXYZI().swap(*laserCloudOri);
+                PointCloudXYZI().swap(*laserCloudOri);//swap函数，这里是清空laserCloudOri
                 PointCloudXYZI().swap(*corr_normvect);
                 // laserCloudOri->clear();
                 // corr_normvect->clear();
@@ -1306,8 +1319,8 @@ int main(int argc, char **argv)
                     PointType &point_world = feats_down_world->points[i];
                     V3D p_body(point_body.x, point_body.y, point_body.z);
                     /* transform to world frame */
-                    pointBodyToWorld(&point_body, &point_world);
-                    vector<float> pointSearchSqDis(NUM_MATCH_POINTS); // #define 5
+                    pointBodyToWorld(&point_body, &point_world);//之前point_world是空的，现在赋值了
+                    vector<float> pointSearchSqDis(NUM_MATCH_POINTS); // #define 5，点搜索的距离
 
                     auto &points_near = Nearest_Points[i];
                     uint8_t search_flag = 0;
@@ -1315,52 +1328,53 @@ int main(int argc, char **argv)
                     if (nearest_search_en)
                     {
                         /** Find the closest surfaces in the map **/
-                        ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
-                        point_selected_surf[i] = pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;
+                        ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);//ikdtree搜索得到最近的5个点
+                        point_selected_surf[i] = pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;//如果最后一个点的距离大于5，则不选取
                         kdtree_search_time += omp_get_wtime() - search_start;
                         kdtree_search_counter++;
                     }
 
-                    if (!point_selected_surf[i] || points_near.size() < NUM_MATCH_POINTS)
+                    if (!point_selected_surf[i] || points_near.size() < NUM_MATCH_POINTS)   // 如果不选取或者最近点小于5个
                         continue;
 
-                    VF(4)
-                    pabcd; // Matrix<float, (4), 1>
-                    point_selected_surf[i] = false;
-                    if (esti_plane(pabcd, points_near, 0.1f)) //(planeValid)
+                    //下面来判断这个点是否是平面上的点
+                    VF(4) pabcd; // Matrix<float, (4), 1>
+                    point_selected_surf[i] = false; 
+                    if (esti_plane(pabcd, points_near, 0.1f)) //(planeValid)//判断点是否在平面上
                     {
                         float pd2 = pabcd(0) * point_world.x + pabcd(1) * point_world.y + pabcd(2) * point_world.z +
-                                    pabcd(3);
-                        float s = 1 - 0.9 * fabs(pd2) / sqrt(p_body.norm()); // fabs(pd2) / sqrt(p_body.norm()):点到平面距离公式
-
+                                    pabcd(3);//获得点到平面的距离
+                        float s = 1 - 0.9 * fabs(pd2) / sqrt(p_body.norm()); // fabs(pd2) / sqrt(p_body.norm())
+                        //s表示一个减小的权重因子。这个因子随着点到平面的距离增加而减小。点到平面的距离/点到此帧的距离的开方
                         //                        normvec->resize(feats_down_size);
                         if (s > 0.9)
-                        { // TODO: threshold 点到平面距离 < 1/9
+                        { // TODO: threshold 点到平面距离 < 1/9，则保留点用于平面，保留平面法向量
                             point_selected_surf[i] = true;
                             normvec->points[i].x = pabcd(0); // hr: save normvec
                             normvec->points[i].y = pabcd(1);
                             normvec->points[i].z = pabcd(2);
                             normvec->points[i].intensity = pd2;
-                            res_last[i] = abs(pd2); // hr: save residuals
+                            res_last[i] = abs(pd2); // hr: save residuals//保存残差
                         }
                     }
                 }
                 // cout<<"pca time test: "<<pca_time1<<" "<<pca_time2<<endl;
-                effct_feat_num = 0;
-                laserCloudOri->resize(feats_down_size);
-                corr_normvect->reserve(feats_down_size);
-                for (int i = 0; i < feats_down_size; i++)
+                effct_feat_num = 0; // 有效特征点数量初始化为 0
+                laserCloudOri->resize(feats_down_size); // 调整点云大小
+                corr_normvect->reserve(feats_down_size); // 预留法向量点云的空间
+                
+                for (int i = 0; i < feats_down_size; i++)//对于上面处理好的所有下采样点
                 {
-                    if (point_selected_surf[i] && (res_last[i] <= 2.0))
-                    { // TODO:threshold residuals <= 2.
-                        laserCloudOri->points[effct_feat_num] = feats_down_body->points[i];
-                        corr_normvect->points[effct_feat_num] = normvec->points[i];
-                        total_residual += res_last[i];
-                        effct_feat_num++;
+                    if (point_selected_surf[i] && (res_last[i] <= 2.0))//如果是面点且残差小于2
+                    { // 如果点被选中且残差小于等于 2.0
+                        laserCloudOri->points[effct_feat_num] = feats_down_body->points[i]; // 将点添加到有效特征点云中
+                        corr_normvect->points[effct_feat_num] = normvec->points[i]; // 将对应的法向量添加到法向量点云中
+                        total_residual += res_last[i]; // 累加残差
+                        effct_feat_num++; // 有效特征点数量加 1
                     }
                 }
-
-                res_mean_last = total_residual / effct_feat_num;
+                
+                res_mean_last = total_residual / effct_feat_num; // 计算平均残差
                 // debug:
                 // cout << "[ mapping ]: Effective feature num: " << effct_feat_num << " res_mean_last " << res_mean_last
                 //      << endl;
@@ -1371,27 +1385,27 @@ int main(int argc, char **argv)
                 solve_start = omp_get_wtime();               // 迭代求解开始
 
                 /*** Computation of Measuremnt Jacobian matrix H and measurents vector ***/
-                MatrixXd Hsub(effct_feat_num, 6);
-                VectorXd meas_vec(effct_feat_num);
+                MatrixXd Hsub(effct_feat_num, 6);//H 海森矩阵
+                VectorXd meas_vec(effct_feat_num);// 测量向量
 
-                for (int i = 0; i < effct_feat_num; i++)
+                for (int i = 0; i < effct_feat_num; i++)//对于每一个有效点
                 {
                     const PointType &laser_p = laserCloudOri->points[i];
                     V3D point_this(laser_p.x, laser_p.y, laser_p.z);
-                    point_this += Lidar_offset_to_IMU;
-                    M3D point_crossmat;
-                    point_crossmat << SKEW_SYM_MATRX(point_this); // 斜对称矩阵
+                    point_this += Lidar_offset_to_IMU;//转到IMU坐标系下
+                    M3D point_crossmat;//反对称矩阵
+                    point_crossmat << SKEW_SYM_MATRX(point_this); // 反对称矩阵^,也是外积
 
                     /*** get the normal vector of closest surface/corner ***/
                     const PointType &norm_p = corr_normvect->points[i];
-                    V3D norm_vec(norm_p.x, norm_p.y, norm_p.z);
+                    V3D norm_vec(norm_p.x, norm_p.y, norm_p.z); // 法向量
 
-                    /*** calculate the Measuremnt Jacobian matrix H ***/
-                    V3D A(point_crossmat * state.rot_end.transpose() * norm_vec);
-                    Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z;
+                    /*** calculate the Measuremnt Jacobian matrix H ***///计算测量雅可比矩阵
+                    V3D A(point_crossmat * state.rot_end.transpose() * norm_vec);//点到面残差的雅可比矩阵，公式推导见飞书
+                    Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z;//将雅可比矩阵赋值给Hsub
 
                     /*** Measuremnt: distance to the closest surface/corner ***/
-                    meas_vec(i) = -norm_p.intensity;
+                    meas_vec(i) = -norm_p.intensity;//法向量点归一化的那个距禮，也就是点到面的距离
                 }
                 solve_const_H_time += omp_get_wtime() - solve_start;
 
@@ -1400,7 +1414,7 @@ int main(int argc, char **argv)
                 EKF_stop_flg = false;
                 flg_EKF_converged = false;
 
-                /*** Iterative Kalman Filter Update ***/
+                /*** Iterative Kalman Filter Update ***///迭代卡尔曼滤波更新//TODO::这里是ESIKF的核心待看
                 if (!flg_EKF_inited)
                 {
                     cout << "||||||||||Initiallizing LiDar||||||||||" << endl;
@@ -1502,35 +1516,35 @@ int main(int argc, char **argv)
         double time_end = t_update_end;
         std::cout << "LIO time: " << (time_end - time_start) << std::endl;
 
-        /******* Publish odometry *******/
-        euler_cur = RotMtoEuler(state.rot_end);
-        geoQuat = tf::createQuaternionMsgFromRollPitchYaw(euler_cur(0), euler_cur(1), euler_cur(2));
-        publish_odometry(pubOdomAftMapped);
+        /******* Publish odometry *******///发布里程计到ROS
+        euler_cur = RotMtoEuler(state.rot_end);//得到当前帧的欧拉角
+        geoQuat = tf::createQuaternionMsgFromRollPitchYaw(euler_cur(0), euler_cur(1), euler_cur(2));//得到四元数
+        publish_odometry(pubOdomAftMapped);//发布里程计到ROS
 
-        /*** add the feature points to map kdtree ***/
+        /*** add the feature points to map kdtree ***/ //将刚才这帧特征点加入到地图的kdtree中
         t3 = omp_get_wtime();
         map_incremental();
         t5 = omp_get_wtime();
         kdtree_incremental_time = t5 - t3 + readd_time;
-        /******* Publish points *******/
 
-        PointCloudXYZI::Ptr laserCloudFullRes(dense_map_en ? feats_undistort : feats_down_body);
+        /******* Publish points到ROS显示 *******/
+        PointCloudXYZI::Ptr laserCloudFullRes(dense_map_en ? feats_undistort : feats_down_body);//是否显示稠密地图
         int size = laserCloudFullRes->points.size();
         PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
-        for (int i = 0; i < size; i++)
+        for (int i = 0; i < size; i++)//把这帧所有特征点转到世界坐标系下
         {
             RGBpointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
         }
-        *pcl_wait_pub = *laserCloudWorld;
+        *pcl_wait_pub = *laserCloudWorld;//保存到pcl_wait_pub，等待发布
 
-        publish_frame_world(pubLaserCloudFullRes);
+        publish_frame_world(pubLaserCloudFullRes);//发布当前帧，不带颜色
         // publish_visual_world_map(pubVisualCloud);
-        publish_effect_world(pubLaserCloudEffect);
+        publish_effect_world(pubLaserCloudEffect);//发布有色彩效果的当前帧到ROS
         // publish_map(pubLaserCloudMap);
-        publish_path(pubPath);
+        publish_path(pubPath);//发布路径到ROS
 
-        /*** Debug variables ***/
+        /*** Debug variables  debug变量          后面都是调试用的操作========================================================= ***/
         frame_num++;
         aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num + (t5 - t0) / frame_num;
         aver_time_icp = aver_time_icp * (frame_num - 1) / frame_num + (t_update_end - t_update_start) / frame_num;
