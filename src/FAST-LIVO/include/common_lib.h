@@ -216,7 +216,7 @@ struct SparseMap
     vector<V3D> xyz_ref;
     vector<V2D> px;
     M3D Rcl;
-    V3D Pcl;
+    V3D Pcl;//; 相机到lidar的变换
     SparseMap()
     {
         this->points.clear();

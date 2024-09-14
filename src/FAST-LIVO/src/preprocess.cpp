@@ -2,7 +2,8 @@
 
 #define RETURN0 0x00
 #define RETURN0AND1 0x10
-
+//从不同类型的激光雷达中获取点云数据，并根据需要进行预处理和特征提取。
+//这部分应该是属于fast-lio系列中的代码
 Preprocess::Preprocess()
     : feature_enabled(0), lidar_type(AVIA), blind(0.01), point_filter_num(1)
 {
@@ -287,7 +288,7 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
         omega_l *= 1.0 + yaw_cali / 360.0;
     // printf("yaw_cali: %lf \n", yaw_cali);
 
-    if (feature_enabled)
+    if (feature_enabled)//开启特征提取
     {
         for (int i = 0; i < N_SCANS; i++)
         {
@@ -352,17 +353,17 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
             linesize--;
             for (uint i = 0; i < linesize; i++)
             {
-                types[i].range = sqrt(pl[i].x * pl[i].x + pl[i].y * pl[i].y);
+                types[i].range = sqrt(pl[i].x * pl[i].x + pl[i].y * pl[i].y);//这个点的2维距离
                 vx = pl[i].x - pl[i + 1].x;
                 vy = pl[i].y - pl[i + 1].y;
                 vz = pl[i].z - pl[i + 1].z;
-                types[i].dista = vx * vx + vy * vy + vz * vz;
+                types[i].dista = vx * vx + vy * vy + vz * vz;//保存相邻点的距离
             }
             types[linesize].range = sqrt(pl[linesize].x * pl[linesize].x + pl[linesize].y * pl[linesize].y);
             give_feature(pl, types);
         }
     }
-    else
+    else//不启用特征提取，采取fast-lio中的方法
     {
         for (int i = 0; i < plsize; i++)
         {
@@ -393,7 +394,7 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
             // compute offset time
             if (yaw_angle <= yaw_fp[layer])
             {
-                added_pt.curvature = (yaw_fp[layer] - yaw_angle) / omega_l;
+                added_pt.curvature = (yaw_fp[layer] - yaw_angle) / omega_l;//计算曲率
             }
             else
             {
@@ -422,6 +423,13 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
     // pub_func(pl_surf, pub_corn, msg->header.stamp);
 }
 
+
+/**
+ * @brief 对于每条line的点云提取特征
+ * 
+ * @param pl  pcl格式的点云 输入进来一条扫描线上的点
+ * @param types  点云的其他属性
+ */
 void Preprocess::give_feature(pcl::PointCloud<PointType> &pl, vector<orgtype> &types)
 {
     uint plsize = pl.size();
@@ -742,19 +750,20 @@ void Preprocess::pub_func(PointCloudXYZI &pl, const ros::Time &ct)
     output.header.frame_id = "livox";
     output.header.stamp = ct;
 }
-
 int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, uint i_cur, uint &i_nex, Eigen::Vector3d &curr_direct)
 {
+    // 计算当前点的分组距离阈值
     double group_dis = disA * types[i_cur].range + disB;
     group_dis = group_dis * group_dis;
-    // i_nex = i_cur;
 
     double two_dis;
     vector<double> disarr;
     disarr.reserve(20);
 
+    // 初始化i_nex并计算初始分组距离
     for (i_nex = i_cur; i_nex < i_cur + group_size; i_nex++)
     {
+        // 如果当前点的距离小于盲区距离，返回2并将方向向量置零
         if (types[i_nex].range < blind)
         {
             curr_direct.setZero();
@@ -763,6 +772,7 @@ int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, ui
         disarr.push_back(types[i_nex].dista);
     }
 
+    // 循环计算两点之间的距离，直到超过分组距离阈值
     for (;;)
     {
         if ((i_cur >= pl.size()) || (i_nex >= pl.size()))
@@ -773,10 +783,14 @@ int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, ui
             curr_direct.setZero();
             return 2;
         }
+
+        // 计算两点之间的距离平方
         vx = pl[i_nex].x - pl[i_cur].x;
         vy = pl[i_nex].y - pl[i_cur].y;
         vz = pl[i_nex].z - pl[i_cur].z;
         two_dis = vx * vx + vy * vy + vz * vz;
+
+        // 如果距离超过分组距离阈值，跳出循环
         if (two_dis >= group_dis)
         {
             break;
@@ -787,6 +801,8 @@ int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, ui
 
     double leng_wid = 0;
     double v1[3], v2[3];
+
+    // 计算当前分组内点的最大宽度
     for (uint j = i_cur + 1; j < i_nex; j++)
     {
         if ((j >= pl.size()) || (i_cur >= pl.size()))
@@ -806,12 +822,14 @@ int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, ui
         }
     }
 
+    // 判断当前分组是否为平面
     if ((two_dis * two_dis / leng_wid) < p2l_ratio)
     {
         curr_direct.setZero();
         return 0;
     }
 
+    // 对距离数组进行排序
     uint disarrsize = disarr.size();
     for (uint j = 0; j < disarrsize - 1; j++)
     {
@@ -826,12 +844,14 @@ int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, ui
         }
     }
 
+    // 如果次小距离小于阈值，返回0并将方向向量置零
     if (disarr[disarr.size() - 2] < 1e-16)
     {
         curr_direct.setZero();
         return 0;
     }
 
+    // 根据激光雷达类型进行不同的距离判断
     if (lidar_type == AVIA)
     {
         double dismax_mid = disarr[0] / disarr[disarrsize / 2];
@@ -853,6 +873,7 @@ int Preprocess::plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, ui
         }
     }
 
+    // 设置当前方向向量并归一化
     curr_direct << vx, vy, vz;
     curr_direct.normalize();
     return 1;

@@ -978,7 +978,7 @@ void readParameters(ros::NodeHandle &nh)
     nh.param<vector<double>>("camera/Pcl", cameraextrinT, vector<double>()); // 相机雷达外参
     nh.param<vector<double>>("camera/Rcl", cameraextrinR, vector<double>());
     nh.param<int>("grid_size", grid_size, 40);    // 每个网格的像素宽高，配置为 40
-    nh.param<int>("patch_size", patch_size, 4);   // 选择的 patch 的宽高，配置为 8
+    nh.param<int>("patch_size", patch_size, 4);   // 选择的 patch 的宽高，配置为 4
     nh.param<double>("outlier_threshold", outlier_threshold, 100);
     nh.param<double>("ncc_thre", ncc_thre, 100);
 }

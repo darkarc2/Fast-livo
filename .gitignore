@@ -3,3 +3,4 @@ devel/
 /rpg_vikit/
 .vscode/
 .catkin_workspace
+src/FAST-LIVO/Log/
