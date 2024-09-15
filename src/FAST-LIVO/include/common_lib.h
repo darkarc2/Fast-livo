@@ -430,7 +430,7 @@ struct StatesGroup
         this->vel_end = Zero3d;
     }
 
-    M3D rot_end;                              // the estimated attitude (rotation matrix) at the end lidar point 末激光雷达点的估计姿态旋转矩阵
+    M3D rot_end;                              // the estimated attitude (rotation matrix) at the end lidar point 末激光雷达点时刻的估计姿态旋转矩阵，world坐标系到imu坐标系
     V3D pos_end;                              // the estimated position at the end lidar point (world frame)
     V3D vel_end;                              // the estimated velocity at the end lidar point (world frame)
     V3D bias_g;                               // gyroscope bias

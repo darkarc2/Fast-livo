@@ -65,7 +65,7 @@ void ImuProcess::push_update_state(double offs_t, StatesGroup state)
     IMUpose.push_back(set_pose6d(offs_t, acc_tmp, angvel_tmp, vel_imu, pos_imu, R_imu));
 }
 
-void ImuProcess::set_extrinsic(const MD(4, 4) & T)
+void ImuProcess::set_extrinsic(const MD(4, 4) & T)//设置外参
 {
     Lid_offset_to_IMU = T.block<3, 1>(0, 3);
     Lid_rot_to_IMU = T.block<3, 3>(0, 0);
@@ -158,8 +158,9 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
 
 void ImuProcess::IMU_init(const MeasureGroup &meas, StatesGroup &state_inout, int &N)
 {
-    /** 1. initializing the gravity, gyro bias, acc and gyro covariance
-     ** 2. normalize the acceleration measurenments to unit gravity **/
+    /** 1. 初始化重力、陀螺偏置、加速度和陀螺协方差 
+     ** 2. 将加速度测量值归一化为单位重力 **/
+    
     ROS_INFO("IMU Initializing: %.1f %%", double(N) / MAX_INI_COUNT * 100);
     V3D cur_acc, cur_gyr;
 
@@ -334,10 +335,11 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
 }
 #else
 
+//论文中的前向传播模型
 void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, double pcl_beg_time, double end_time)
 {
     /*** add the imu of the last frame-tail to the of current frame-head ***/
-    auto v_imu = meas.imu;
+    auto v_imu = meas.imu;//从数据包中获取IMU数据
     v_imu.push_front(last_imu_);
     const double &imu_beg_time = v_imu.front()->header.stamp.toSec();
     const double &imu_end_time = v_imu.back()->header.stamp.toSec();
@@ -346,7 +348,7 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
   //          <<meas.imu.size()<<" imu msgs from "<<imu_beg_time<<" to "<<imu_end_time<<endl;
 
     // IMUpose.push_back(set_pose6d(0.0, Zero3d, Zero3d, state.vel_end, state.pos_end, state.rot_end));
-    if (IMUpose.empty())
+    if (IMUpose.empty())//把第一个点加入
     {
         IMUpose.push_back(set_pose6d(0.0, acc_s_last, angvel_last, state_inout.vel_end, state_inout.pos_end,
                                      state_inout.rot_end));
@@ -370,7 +372,7 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
 
         angvel_avr << 0.5 * (head->angular_velocity.x + tail->angular_velocity.x),
             0.5 * (head->angular_velocity.y + tail->angular_velocity.y),
-            0.5 * (head->angular_velocity.z + tail->angular_velocity.z);
+            0.5 * (head->angular_velocity.z + tail->angular_velocity.z);//角速度取平均值,中值积分
 
         // angvel_avr<<tail->angular_velocity.x, tail->angular_velocity.y, tail->angular_velocity.z;
 
@@ -381,7 +383,7 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
         last_ang = angvel_avr;
         // #ifdef DEBUG_PRINT
         fout_imu << setw(10) << head->header.stamp.toSec() - first_lidar_time << " " << angvel_avr.transpose() << " "
-                 << acc_avr.transpose() << endl;
+                 << acc_avr.transpose() << endl;//输出IMU数据到文件
         // #endif
 
         angvel_avr -= state_inout.bias_g;
@@ -397,7 +399,7 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
         }
         // cout<<setw(20)<<"dt: "<<dt<<endl;
         /* covariance propagation */
-        M3D acc_avr_skew;
+        M3D acc_avr_skew;//计算角速度的斜对称矩阵(反对称矩阵)
         M3D Exp_f = Exp(angvel_avr, dt);
         acc_avr_skew << SKEW_SYM_MATRX(acc_avr);
 
@@ -419,7 +421,7 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
 
         state_inout.cov = F_x * state_inout.cov * F_x.transpose() + cov_w;
 
-        /* propogation of IMU attitude */
+        /* propogation of IMU attitude 这个R_imu相当于把世界坐标系转到车体坐标系下*/
         R_imu = R_imu * Exp_f;
 
         /* Specific acceleration (global frame) of IMU */
@@ -435,15 +437,15 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
         angvel_last = angvel_avr;
         acc_s_last = acc_imu;
         double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
-        IMUpose.push_back(set_pose6d(offs_t, acc_imu, angvel_avr, vel_imu, pos_imu, R_imu));
+        IMUpose.push_back(set_pose6d(offs_t, acc_imu, angvel_avr, vel_imu, pos_imu, R_imu));//把计算得到的imu坐标放到IMUpose中，用于后面对不同时刻的激光点进行运动畸变矫正
     }
 
-    /*** calculated the pos and attitude prediction at the frame-end ***/
+    /*** calculated the pos and attitude prediction at the frame-end 高博自动驾驶书3.15公式***/
     double note = end_time > imu_end_time ? 1.0 : -1.0;
     dt = note * (end_time - imu_end_time);
-    state_inout.vel_end = vel_imu + note * acc_imu * dt;
-    state_inout.rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
-    state_inout.pos_end = pos_imu + note * vel_imu * dt + note * 0.5 * acc_imu * dt * dt;
+    state_inout.vel_end = vel_imu + note * acc_imu * dt;//速度
+    state_inout.rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);//旋转
+    state_inout.pos_end = pos_imu + note * vel_imu * dt + note * 0.5 * acc_imu * dt * dt;//位置
 
     last_imu_ = v_imu.back();
     last_lidar_end_time_ = end_time;
@@ -457,6 +459,7 @@ void ImuProcess::Forward(const MeasureGroup &meas, StatesGroup &state_inout, dou
 #endif
 }
 
+// 反向传播模型，用于修正激光点的运动畸变
 void ImuProcess::Backward(const LidarMeasureGroup &lidar_meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out)
 {
     /*** undistort each lidar point (backward propagation) ***/
@@ -465,7 +468,7 @@ void ImuProcess::Backward(const LidarMeasureGroup &lidar_meas, StatesGroup &stat
     double dt;
     auto pos_liD_e = state_inout.pos_end + state_inout.rot_end * Lid_offset_to_IMU;
     auto it_pcl = pcl_out.points.end() - 1;
-    for (auto it_kp = IMUpose.end() - 1; it_kp != IMUpose.begin(); it_kp--)
+    for (auto it_kp = IMUpose.end() - 1; it_kp != IMUpose.begin(); it_kp--)//从后往前遍历IMU数据
     {
         auto head = it_kp - 1;
         auto tail = it_kp;
@@ -475,7 +478,7 @@ void ImuProcess::Backward(const LidarMeasureGroup &lidar_meas, StatesGroup &stat
         vel_imu << VEC_FROM_ARRAY(head->vel);
         pos_imu << VEC_FROM_ARRAY(head->pos);
         angvel_avr << VEC_FROM_ARRAY(head->gyr);
-        for (; it_pcl->curvature / double(1000) > head->offset_time; it_pcl--)
+        for (; it_pcl->curvature / double(1000) > head->offset_time; it_pcl--)//从后往前遍历激光点,遍历到当前IMU数据的时间为止
         {
             dt = it_pcl->curvature / double(1000) - head->offset_time;
 
@@ -483,11 +486,11 @@ void ImuProcess::Backward(const LidarMeasureGroup &lidar_meas, StatesGroup &stat
              * Note: Compensation direction is INVERSE of Frame's moving direction
              * So if we want to compensate a point at timestamp-i to the frame-e
              * P_compensate = R_imu_e ^ T * (R_i * P_i + T_ei) where T_ei is represented in global frame */
-            M3D R_i(R_imu * Exp(angvel_avr, dt));
+            M3D R_i(R_imu * Exp(angvel_avr, dt));//拿到这一时刻下的imu旋转矩阵
             V3D T_ei(pos_imu + vel_imu * dt + 0.5 * acc_imu * dt * dt + R_i * Lid_offset_to_IMU - pos_liD_e);
 
             V3D P_i(it_pcl->x, it_pcl->y, it_pcl->z);
-            V3D P_compensate = state_inout.rot_end.transpose() * (R_i * P_i + T_ei);
+            V3D P_compensate = state_inout.rot_end.transpose() * (R_i * P_i + T_ei);//对于过去的某个激光点，先转到对应的过去imu坐标系下，然后再转到当前imu坐标系下
 
             /// save Undistorted points and their rotation
             it_pcl->x = P_compensate(0);
