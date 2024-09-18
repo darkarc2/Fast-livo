@@ -202,29 +202,5 @@ namespace lidar_selection
             }
         }
 
-        // 获得场景深度，传入，帧，深度均值，深度最小值，好像没用到
-        // bool getSceneDepth(const Frame &frame, double &depth_mean, double &depth_min)
-        // {
-        //     vector<double> depth_vec;
-        //     depth_vec.reserve(frame.fts_.size());
-        //     depth_min = std::numeric_limits<double>::max();
-        //     for (auto it = frame.fts_.begin(), ite = frame.fts_.end(); it != ite; ++it)
-        //     {
-        //         if ((*it)->point != nullptr)
-        //         {
-        //             const double z = frame.w2f((*it)->point->pos_).z(); // world-frame (w) to camera-frams
-        //             depth_vec.push_back(z);
-        //             depth_min = fmin(z, depth_min); // f:专门用于浮点数？接受两个参数并返回其中最小的一个。如果其中一个参数是 NaN，则返回另一个参数
-        //         }
-        //     }
-        //     if (depth_vec.empty())
-        //     {
-        //         cout << "Cannot set scene depth. Frame has no point-observations!" << endl;
-        //         return false;
-        //     }
-        //     depth_mean = vk::getMedian(depth_vec); // 获得深度均值
-        //     return true;
-        // }
-
     } // namespace frame_utils
 } // namespace lidar_selection

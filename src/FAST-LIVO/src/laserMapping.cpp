@@ -67,13 +67,9 @@
 #include "lidar_selection.h"
 
 #ifdef USE_ikdtree
-#ifdef USE_ikdforest
-#include <ikd-Forest/ikd_Forest.h>
-#else
 
 #include <ikd-Tree/ikd_Tree.h>
 
-#endif
 #else
 #include <pcl/kdtree/kdtree_flann.h>
 #endif
@@ -83,14 +79,9 @@
 #define PUBFRAME_PERIOD (20)
 
 float DET_RANGE = 300.0f;   // 激光雷达的最大检测范围
-#ifdef USE_ikdforest
-const int laserCloudWidth = 200;    //定义激光点云的宽度
-const int laserCloudHeight = 200;
-const int laserCloudDepth = 200;
-const int laserCloudNum = laserCloudWidth * laserCloudHeight * laserCloudDepth;
-#else
+
 const float MOV_THRESHOLD = 1.5f;   //局部地图移动阈值
-#endif
+
 
 mutex mtx_buffer;
 condition_variable sig_buffer;
@@ -176,11 +167,9 @@ pcl::VoxelGrid<PointType> downSizeFilterSurf;   //; 下采样滤波器surf表面
 pcl::VoxelGrid<PointType> downSizeFilterMap;        //; 下采样滤波器地图
 
 #ifdef USE_ikdtree
-#ifdef USE_ikdforest
-KD_FOREST ikdforest;
-#else
+
 KD_TREE ikdtree;
-#endif
+
 #else
 pcl::KdTreeFLANN<PointType>::Ptr kdtreeSurfFromMap(new pcl::KdTreeFLANN<PointType>());
 #endif
@@ -195,13 +184,9 @@ Eigen::Vector3d Pcl;//;
 //estimator inputs and output;
 LidarMeasureGroup LidarMeasures;   //; 同步之后的消息
 // SparseMap sparse_map;
-#ifdef USE_IKFOM
-esekfom::esekf<state_ikfom, 12, input_ikfom> kf;
-state_ikfom state_point;
-vect3 pos_lid;
-#else
+
 StatesGroup state;
-#endif
+
 
 nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
@@ -220,21 +205,6 @@ void SigHandle(int sig)//; 信号处理函数ROS下必须要用这个函数
 
 inline void dump_lio_state_to_log(FILE *fp)//; 将状态信息写入日志
 {
-#ifdef USE_IKFOM
-    //state_ikfom write_state = kf.get_x();
-    V3D rot_ang(Log(state_point.rot.toRotationMatrix()));
-    fprintf(fp, "%lf ", LidarMeasures.lidar_beg_time - first_lidar_time);
-    fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                            // Angle
-    fprintf(fp, "%lf %lf %lf ", state_point.pos(0), state_point.pos(1), state_point.pos(2));    // Pos
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                                 // omega
-    fprintf(fp, "%lf %lf %lf ", state_point.vel(0), state_point.vel(1), state_point.vel(2));    // Vel
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                                 // Acc
-    fprintf(fp, "%lf %lf %lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));       // Bias_g
-    fprintf(fp, "%lf %lf %lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));       // Bias_a
-    fprintf(fp, "%lf %lf %lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]); // Bias_a
-    fprintf(fp, "\r\n");
-    fflush(fp);
-#else
     V3D rot_ang(Log(state.rot_end));
     fprintf(fp, "%lf ", LidarMeasures.lidar_beg_time - first_lidar_time);
     fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                   // Angle
@@ -247,33 +217,16 @@ inline void dump_lio_state_to_log(FILE *fp)//; 将状态信息写入日志
     fprintf(fp, "%lf %lf %lf ", state.gravity(0), state.gravity(1), state.gravity(2)); // Bias_a
     fprintf(fp, "\r\n");
     fflush(fp);
-#endif
+
 }
 
-#ifdef USE_IKFOM
-// project the lidar scan to world frame//imu坐标系到激光坐标系，再到传入的s坐标系，s可能是世界到激光坐标系的变换
-void pointBodyToWorld_ikfom(PointType const *const pi, PointType *const po, state_ikfom &s)
-{
-    V3D p_body(pi->x, pi->y, pi->z);
-    V3D p_global(s.rot * (s.offset_R_L_I * p_body + s.offset_T_L_I) + s.pos);
-
-    po->x = p_global(0);
-    po->y = p_global(1);
-    po->z = p_global(2);
-    po->intensity = pi->intensity;
-}
-#endif
 
 // 把imu局部坐标系下的点，通过全局维护的位姿变量投影到世界坐标系下
 void pointBodyToWorld(PointType const *const pi, PointType *const po)
 {
     V3D p_body(pi->x, pi->y, pi->z);
-#ifdef USE_IKFOM
-    //state_ikfom transfer_state = kf.get_x();
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
-#else
+
     V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);//把激光点转到imu坐标系，再转到世界坐标系
-#endif
 
     po->x = p_global(0);
     po->y = p_global(1);
@@ -285,12 +238,9 @@ template <typename T>
 void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
 {
     V3D p_body(pi[0], pi[1], pi[2]);
-#ifdef USE_IKFOM
-    //state_ikfom transfer_state = kf.get_x();
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
-#else
+
     V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);//把激光点转到imu坐标系，再转到世界坐标系
-#endif
+
     po[0] = p_global(0);
     po[1] = p_global(1);
     po[2] = p_global(2);
@@ -299,12 +249,9 @@ void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
 void RGBpointBodyToWorld(PointType const *const pi, PointType *const po)//RGB点，从body坐标系到world坐标系
 {
     V3D p_body(pi->x, pi->y, pi->z);
-#ifdef USE_IKFOM
-    //state_ikfom transfer_state = kf.get_x();
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
-#else
+
     V3D p_global(state.rot_end * (p_body + Lidar_offset_to_IMU) + state.pos_end);
-#endif
+
     po->x = p_global(0);
     po->y = p_global(1);
     po->z = p_global(2);
@@ -316,7 +263,7 @@ void RGBpointBodyToWorld(PointType const *const pi, PointType *const po)//RGB点
     int reflection_map = intensity * 10000;
 }
 
-#ifndef USE_ikdforest
+
 int points_cache_size = 0;
 
 void points_cache_collect() //; 收集删除的点云
@@ -326,7 +273,6 @@ void points_cache_collect() //; 收集删除的点云
     points_cache_size = points_history.size();
 }
 
-#endif
 
 BoxPointType get_cube_point(float center_x, float center_y, float center_z)//; 获取立方体中心的的x、y、z边长坐标
 {
@@ -355,7 +301,7 @@ BoxPointType get_cube_point(float xmin, float ymin, float zmin, float xmax, floa
     return cube_points;
 }
 
-#ifndef USE_ikdforest
+
 BoxPointType LocalMap_Points;   //; 本地地图的点云
 bool Localmap_Initialized = false;  //; 是否初始化了本地地图
 
@@ -366,13 +312,9 @@ void lasermap_fov_segment()
     kdtree_delete_counter = 0;
     kdtree_delete_time = 0.0;
     pointBodyToWorld(XAxisPoint_body, XAxisPoint_world);
-#ifdef USE_IKFOM
-    //state_ikfom fov_state = kf.get_x();
-    //V3D pos_LiD = fov_state.pos + fov_state.rot * fov_state.offset_T_L_I;
-    V3D pos_LiD = pos_lid;//; 激光雷达的位置
-#else
+
     V3D pos_LiD = state.pos_end;
-#endif
+
     if (!Localmap_Initialized)
     {
         //if (cube_len <= 2.0 * MOV_THRESHOLD * DET_RANGE) throw std::invalid_argument("[Error]: Local Map Size is too small! Please change parameter \"cube_side_length\" to larger than %d in the launch file.\n");
@@ -433,7 +375,7 @@ void lasermap_fov_segment()
     // printf("Delete Box: %d\n",int(cub_needrm.size()));
 }
 
-#endif
+
 
 //; 通用LiDAR类型的回调函数，比如机械式的LiDAR
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
@@ -761,11 +703,7 @@ void map_incremental()//地图增量更新
         pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
     }
 #ifdef USE_ikdtree
-#ifdef USE_ikdforest
-    ikdforest.Add_Points(feats_down_world->points, lidar_end_time);
-#else
     ikdtree.Add_Points(feats_down_world->points, true);
-#endif
 #endif
 }
 

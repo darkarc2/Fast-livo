@@ -104,7 +104,7 @@ catkin_package(
 #; ikdtree部分，最后我们应该不用
 add_library(ikdtree include/ikd-Tree/ikd_Tree.cpp
                     # include/ikd-Forest/ikd_Forest.cpp 
-                    include/FOV_Checker/FOV_Checker.cpp
+                    # include/FOV_Checker/FOV_Checker.cpp
                     )
 
 #; VIO部分
